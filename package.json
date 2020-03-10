@@ -1,0 +1,21 @@
+{
+  "name": "currency-api",
+  "version": "0.0.0",
+  "description": "this is an api to convert currency received over http/https and respond to any requester",
+  "main": "index.js",
+  "scripts": {
+    "start": "node ./bin/www",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "The_Spectre",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^0.19.2",
+    "express": "^4.17.1",
+    "mongoose": "^5.9.3"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.2",
+    "@types/mongoose": "^5.7.3"
+  }
+}
