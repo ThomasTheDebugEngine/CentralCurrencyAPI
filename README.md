@@ -6,4 +6,5 @@ this API is meant to be a universal currency API that can be configured to utili
 
 # IMPORTANT:  mongoDB required !!!
 
-note: for windows users a ps1 file for autoconfig is included
+note: for windows users a ps1 file for autoconfig is included from :https://github.com/ThomasTheDebugEngine/MongoDB-AutoconfigWin
+check that out for automated setup of the database for windows
