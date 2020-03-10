@@ -64,5 +64,5 @@ export class Rquest{
 }
 
 var exc = new Rquest(new DBmanager);
-exc.getNewRates()
+exc.getNewRates();
 //exc.CompileQuery();
