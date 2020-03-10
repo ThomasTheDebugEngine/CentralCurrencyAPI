@@ -1,12 +1,19 @@
 import mongoose, { Schema } from "mongoose";
-import {IRquest, Rquest} from "../contollers/currency-controller";
+import { AxiosResponse } from "axios";
+//import {IRquest, Rquest} from "../contollers/currency-controller";
 
-export class DBmanager{
+
+export interface IDBManager{
+    Connect():void;
+    AddNewCurrencyEntry(resp: any):void; //need to find the correct type
+}
+
+export class DBmanager implements IDBManager{
     private DBaddr:string = "127.0.0.1:4041/test1"; //TODO change to CurrencyDB after testing
-    private Rquest: IRquest;
+    //private Rquest: IRquest;
 
     
-    private currencySchema = new mongoose.Schema({
+    private currencySchema = new Schema({
         
         apiSource: String,
         baseCurrency: String,
@@ -16,8 +23,8 @@ export class DBmanager{
     });
     
 
-    constructor(_Rquest : IRquest){
-        this.Rquest = _Rquest;
+    constructor(/*_Rquest : IRquest*/){
+        //this.Rquest = _Rquest;
     }
 
     Connect(){
@@ -44,8 +51,8 @@ export class DBmanager{
         });
     }
 
-    async AddCurrencyEntry(){
-        var resp = await this.Rquest.GetExchangeRates("https://api.exchangeratesapi.io/latest");//TODO automate URL
+    async AddNewCurrencyEntry(resp: any){
+        //var resp = await this.Rquest.GetExchangeRates("https://api.exchangeratesapi.io/latest");//TODO automate URL
         
         //? may need to check if all APIs have these fields the same
         var baseCurrency: string = resp.data.base;
@@ -95,9 +102,9 @@ export class DBmanager{
     //TODO make a function to check if data is stale
 }
 
-var DB = new DBmanager(new Rquest);
-DB.Connect();
-DB.AddCurrencyEntry();
+//var DB = new DBmanager(/*new Rquest*/);
+//DB.Connect();
+//DB.AddNewCurrencyEntry();
 
 
 

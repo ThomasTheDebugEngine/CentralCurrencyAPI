@@ -1,5 +1,5 @@
 import {Request, Response} from "express";
-//import { DBmanager} from "../models/currency-model";
+import { DBmanager , IDBManager} from "../models/currency-model";
 import axios, { AxiosResponse, AxiosPromise } from "axios";
 
  
@@ -19,13 +19,14 @@ class UrlInterpreter{
     }
 }
 
-export interface IRquest{
-    GetExchangeRates(apiURL:string);
-}
 
-
-export class Rquest implements IRquest{
+export class Rquest{
     private Url: string = "https://api.exchangeratesapi.io/latest";
+    private db: IDBManager;
+
+    constructor(_DBmanager: IDBManager){
+        this.db = _DBmanager;
+    }
 
     async GetExchangeRates(apiURL: string){
         try {
@@ -36,6 +37,13 @@ export class Rquest implements IRquest{
             console.error("Request error: " + error);
             throw error;
         }
+    }
+
+    async getNewRates(){
+        var respon = await this.GetExchangeRates(this.Url);
+        
+        this.db.Connect();
+        this.db.AddNewCurrencyEntry(respon);
     }
 
 
@@ -55,5 +63,6 @@ export class Rquest implements IRquest{
     */
 }
 
-var exc = new Rquest();
+var exc = new Rquest(new DBmanager);
+exc.getNewRates()
 //exc.CompileQuery();
