@@ -1,5 +1,5 @@
 import {Request, Response} from "express";
-import { DBmanager , IDBManager} from "../models/currency-model";
+import { DBmanager, IDBManager} from "../models/currency-model";
 import axios, { AxiosResponse, AxiosPromise } from "axios";
 
  
@@ -40,29 +40,12 @@ export class Rquest{
     }
 
     async getNewRates(){
-        var respon = await this.GetExchangeRates(this.Url);
+        var response = await this.GetExchangeRates(this.Url);
         
         this.db.Connect();
-        this.db.AddNewCurrencyEntry(respon);
+        this.db.addNewCurrencyEntry(response);
     }
-
-
-    /*
-    CompileQuery(){
-        let UsedAPI: string = "https://api.exchangeratesapi.io/latest"; //TODO default automate later
-        this.GetExchangeRates(UsedAPI)
-        .then((resp) => {
-            console.log("TEST IS: " + UsedAPI)
-
-            var 
-
-        }).catch((err)=>{ throw "ERROR: " + err + " request from : " + UsedAPI});
-
-        //console.log("TEST IS: " + ratesBody)
-    }
-    */
 }
 
 var exc = new Rquest(new DBmanager);
 exc.getNewRates();
-//exc.CompileQuery();

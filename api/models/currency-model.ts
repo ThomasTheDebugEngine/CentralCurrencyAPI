@@ -5,13 +5,11 @@ import { AxiosResponse } from "axios";
 
 export interface IDBManager{
     Connect():void;
-    AddNewCurrencyEntry(resp: any):void; //need to find the correct type
+    addNewCurrencyEntry(resp: any):void; //need to find the correct type
 }
 
 export class DBmanager implements IDBManager{
     private DBaddr:string = "127.0.0.1:4041/test1"; //TODO change to CurrencyDB after testing
-    //private Rquest: IRquest;
-
     
     private currencySchema = new Schema({
         
@@ -21,11 +19,6 @@ export class DBmanager implements IDBManager{
 
         rates:{type: Map}
     });
-    
-
-    constructor(/*_Rquest : IRquest*/){
-        //this.Rquest = _Rquest;
-    }
 
     Connect(){
         let connOpts = {
@@ -51,9 +44,7 @@ export class DBmanager implements IDBManager{
         });
     }
 
-    async AddNewCurrencyEntry(resp: any){
-        //var resp = await this.Rquest.GetExchangeRates("https://api.exchangeratesapi.io/latest");//TODO automate URL
-        
+    async addNewCurrencyEntry(resp: any){
         //? may need to check if all APIs have these fields the same
         var baseCurrency: string = resp.data.base;
         var entryDate: string = resp.data.date;
@@ -96,17 +87,6 @@ export class DBmanager implements IDBManager{
         });
         
     }
-
-    //TODO reverse dependencies to controller
     //TODO check base and rebase if not USD (base does not appear in request need to derive it)
     //TODO make a function to check if data is stale
 }
-
-//var DB = new DBmanager(/*new Rquest*/);
-//DB.Connect();
-//DB.AddNewCurrencyEntry();
-
-
-
-
-//export {ShcemaDefinition};
