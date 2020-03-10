@@ -21,7 +21,7 @@ class UrlInterpreter{
 
 
 export class Rquest{
-    private Url: string = "https://api.exchangeratesapi.io/latest";
+    private Url: string = "https://api.exchangeratesapi.io/latest?base=USD";
     private db: IDBManager;
 
     constructor(_DBmanager: IDBManager){
@@ -43,7 +43,7 @@ export class Rquest{
         var response = await this.GetExchangeRates(this.Url);
         
         this.db.Connect();
-        this.db.addNewCurrencyEntry(response);
+        this.db.checkStaleData(response);
     }
 }
 
