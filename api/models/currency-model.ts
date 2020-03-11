@@ -6,7 +6,7 @@ import { AxiosResponse } from "axios";
 export interface IDBManager{
     Connect(): void;
     //addNewCurrencyEntry(resp: any): void; //need to find the correct type
-    checkStaleData(response: any): void;
+    getExchangeRates(): void;
 }
 
 export class DBmanager implements IDBManager{
@@ -25,7 +25,7 @@ export class DBmanager implements IDBManager{
     private currrencyModel:any;
     private newModel: any;
 
-    Connect(){
+    async Connect(){
         let connOpts = {
             useNewUrlParser: true,
             useUnifiedTopology: true
@@ -72,15 +72,6 @@ export class DBmanager implements IDBManager{
             rates: {rateMap}
         });
         
-        /*
-        currencyEntry.updateOne(
-            {},
-            {
-                $push: {rates: {countryCode: "TRYTRYTRYTRYTRY"}}
-            }
-        ).then((rates)=>{console.log(rates)})
-        */
-        
         await currencyEntry.save((err: Error) => {
             if(err) {
                 console.error("ERROR: save failed: " + err);
@@ -92,44 +83,44 @@ export class DBmanager implements IDBManager{
         });
         
     }
+    isDataStale():boolean{
+        let cursor: mongoose.QueryCursor<any> = this.findYesterdayDbEntry("currencymodels",this.currencySchema);
 
-    async checkStaleData(response: any){
-        if(this.currrencyModel != undefined){ //! reversed for debugging
-            console.log("no data found requesting latest rates...");
-            this.addNewCurrencyEntry(response);
+        if(cursor == null || cursor == undefined){
+            return true; //no new rates exist in the db need new rates
         }
-        else { //! needs continous run to be implemented first (checking via remote method now)
-            console.log("SOME DATA IS HERE");
-            //TODO check data timestamp
-
-            let yesterdayZuluDate: string = this.getYesterdayZulu();
-
-            let tstmodel = mongoose.model("currencymodels", this.currencySchema); //need to change model later
-            
-            //console.log(Date.now.toString())
-            //var query = ""
-
-            let query = await tstmodel.find(
-                {
-                    "entryDate": yesterdayZuluDate //data is up to date
-                }
-
-            ).lean();
-
-            query.forEach(function(err, doc){
-                //if(err) {console.error("ERROR querying data: " + err)}
-                console.log(doc)
-            })
-
-            //const {
-            //    apiSource
-            //} = query;
-
-            
-
-            //console.log(query);
-            
+        else{
+            return false; //data in the db is up to date
         }
+    }
+
+    async getExchangeRates(){ //? maybe return in here also
+        if(this.isDataStale()){
+            console.log("STALE DATA")
+            //TODO data is old request new data (need a way to signal that response is needed)
+            //this.addNewCurrencyEntry(response);
+        }
+        else{
+            //TODO data is up to date: query(done), extract(WIP) and return(TODO)
+            let cursor: mongoose.QueryCursor<any> = this.findYesterdayDbEntry("currencymodels",this.currencySchema);
+
+            await cursor.eachAsync((doc: mongoose.Document) => {
+                console.log(doc); //TODO extraction happens here fo each document
+            });
+        }
+    }
+
+    findYesterdayDbEntry(modelName: string, inputSchema: mongoose.Schema):mongoose.QueryCursor<any>{
+        let searchModel = mongoose.model(modelName, inputSchema);
+        let yesterdayZulu = this.getYesterdayZulu();
+
+        let cursor:mongoose.QueryCursor<any> = searchModel.find(
+            {
+                "entryDate": yesterdayZulu
+            }
+        ).lean().cursor();
+
+        return cursor;
     }
 
     getYesterdayZulu(): string{
@@ -142,4 +133,3 @@ export class DBmanager implements IDBManager{
         return yesterdayZulu;
     }
 }
-//TODO make a function to check if data is stale (from database not request)

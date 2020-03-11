@@ -40,10 +40,10 @@ export class Rquest{
     }
 
     async getNewRates(){
-        var response = await this.GetExchangeRates(this.Url);
-        
+        var response = await this.GetExchangeRates(this.Url); //TODO remove this to make it conditional
+
         this.db.Connect();
-        this.db.checkStaleData(response);
+        this.db.getExchangeRates();
     }
 }
 
