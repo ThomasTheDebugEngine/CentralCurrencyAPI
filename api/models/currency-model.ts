@@ -5,8 +5,8 @@ import { AxiosResponse } from "axios";
 
 export interface IDBManager{
     Connect(): void;
-    //addNewCurrencyEntry(resp: any): void; //need to find the correct type
-    getExchangeRates(): void;
+    isDataStale(): Promise<boolean>;
+    getExchangeRates(response?: any): void;
 }
 
 export class DBmanager implements IDBManager{
@@ -37,7 +37,7 @@ export class DBmanager implements IDBManager{
             mongoose.connect("mongodb://" + this.DBaddr, connOpts);
         } 
         catch (error) {
-            console.error("DB CONN ERROR: " + error);
+            throw Error("DB CONN ERROR: " + error);
         }
 
         this.connection.once("open", () => {
@@ -45,7 +45,7 @@ export class DBmanager implements IDBManager{
         });
         
         this.connection.on("error", (err:Error) => {
-            console.error("DB ERROR: " + err);
+            throw Error("DB ERROR: " + err);
         });
     }
 
@@ -74,8 +74,7 @@ export class DBmanager implements IDBManager{
         
         await currencyEntry.save((err: Error) => {
             if(err) {
-                console.error("ERROR: save failed: " + err);
-                throw err;
+                throw Error("ERROR: save failed: " + err);
             }
             else{
                 console.log("SUCCESS: save complete")
@@ -83,53 +82,109 @@ export class DBmanager implements IDBManager{
         });
         
     }
-    isDataStale():boolean{
-        let cursor: mongoose.QueryCursor<any> = this.findYesterdayDbEntry("currencymodels",this.currencySchema);
+    async isDataStale():Promise<boolean>{
+        try {
+            var documentCount: number = await this.getRecentDbEntryCount("currencymodels",this.currencySchema);
+        } 
+        catch (error) {
+            throw Error("ERROR: internal checking stale data" + error);
+        }
 
-        if(cursor == null || cursor == undefined){
+        if(documentCount == 0){
             return true; //no new rates exist in the db need new rates
         }
         else{
+            //console.log(cursor)
             return false; //data in the db is up to date
         }
     }
 
-    async getExchangeRates(){ //? maybe return in here also
-        if(this.isDataStale()){
-            console.log("STALE DATA")
-            //TODO data is old request new data (need a way to signal that response is needed)
+    async getExchangeRates(response?: any){ //? maybe return in here also
+        try {
+            var boolDataStale: boolean = await this.isDataStale();
+            
+        } 
+        catch (error) {
+            throw Error("ERROR: external checking stale data " + error);
+        }
+
+        if(boolDataStale){ //! these are commented out for cache and fallback data testing
+            console.log("STALE DATA");
+            //TODO data is old request new data
             //this.addNewCurrencyEntry(response);
         }
-        else{
+        else if (!boolDataStale){
+            console.log("DATA EXISTS");
+            
             //TODO data is up to date: query(done), extract(WIP) and return(TODO)
-            let cursor: mongoose.QueryCursor<any> = this.findYesterdayDbEntry("currencymodels",this.currencySchema);
+            /*let cursor: mongoose.QueryCursor<any> = this.findYesterdayDbEntry("currencymodels",this.currencySchema);
 
             await cursor.eachAsync((doc: mongoose.Document) => {
-                console.log(doc); //TODO extraction happens here fo each document
-            });
+                console.log(doc); //TODO extraction happens here for each document
+            });*/
         }
     }
 
-    findYesterdayDbEntry(modelName: string, inputSchema: mongoose.Schema):mongoose.QueryCursor<any>{
+    findRecentDbEntry(modelName: string, inputSchema: mongoose.Schema): mongoose.QueryCursor<any>{
         let searchModel = mongoose.model(modelName, inputSchema);
-        let yesterdayZulu = this.getYesterdayZulu();
+        let marketDateArr: string[] = this.getMarketDates();
 
-        let cursor:mongoose.QueryCursor<any> = searchModel.find(
-            {
-                "entryDate": yesterdayZulu
+        for (let idx = 0; idx < marketDateArr.length; idx++) { //latest date first
+            const marketDate:string = marketDateArr[idx];
+
+            const cursor: mongoose.QueryCursor<any> = searchModel.find(
+                {
+                    "entryDate": marketDate
+                }
+            ).lean().cursor();
+
+            if(idx == 0 && (cursor != null || cursor != undefined)){
+                //TODO trigger function to delete old entries (2nd index is old date)
             }
-        ).lean().cursor();
-
-        return cursor;
+    
+            return cursor;
+        }
     }
 
-    getYesterdayZulu(): string{
-        let todayDate = new Date();
-        todayDate.setDate(todayDate.getDate() - 1);
-        todayDate.setMinutes(todayDate.getMinutes() - todayDate.getTimezoneOffset());
+    async getRecentDbEntryCount(modelName: string, inputSchema: mongoose.Schema):Promise<number>{
+        let searchModel = mongoose.model(modelName, inputSchema);
+        let marketDateArr: string[] = this.getMarketDates();
 
-        let yesterdayZulu = todayDate.toISOString().slice(0,10);
-        
-        return yesterdayZulu;
+        for (let idx = 0; idx < marketDateArr.length; idx++) { //latest date first
+            let marketDate: string = marketDateArr[idx];
+
+            try {
+                const documentCount: number = await searchModel.countDocuments(
+                    {
+                        "entryDate": marketDate
+                    },
+                ).lean();
+
+                if(idx == 0 && documentCount != 0){
+                    //TODO trigger function to delete old entries (2nd index is old date)
+                }
+                
+                console.log(documentCount)
+                return documentCount;
+            } 
+            catch (error) {
+                throw Error("ERROR: document count error " + error);
+            }
+        }
+    }
+
+    getMarketDates(): string[]{
+        var todayDate = new Date();
+        var marketDatesArr: string[] = [];
+
+        for (let idx = 0; idx < 2; idx++) {
+            todayDate.setDate(todayDate.getDate() - idx);
+            todayDate.setMinutes(todayDate.getMinutes() - todayDate.getTimezoneOffset());
+            
+            const tst:string = (todayDate.toISOString().slice(0,10));
+            console.log(tst)
+            marketDatesArr[idx] = tst
+        }
+        return marketDatesArr;
     }
 }

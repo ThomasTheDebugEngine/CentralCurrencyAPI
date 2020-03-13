@@ -20,7 +20,7 @@ class UrlInterpreter{
 }
 
 
-export class Rquest{
+class Rquest{
     private Url: string = "https://api.exchangeratesapi.io/latest?base=USD";
     private db: IDBManager;
 
@@ -34,16 +34,27 @@ export class Rquest{
             return response;
         } 
         catch (error) {
-            console.error("Request error: " + error);
-            throw error;
+            throw Error("Request error: " + error);
         }
     }
 
     async getNewRates(){
-        var response = await this.GetExchangeRates(this.Url); //TODO remove this to make it conditional
+        //TODO remove this to make it conditional
 
         this.db.Connect();
-        this.db.getExchangeRates();
+
+        if(this.db.isDataStale){
+            try {
+                var response = await this.GetExchangeRates(this.Url);
+                this.db.getExchangeRates(response);   
+            } 
+            catch (error) {
+                throw Error("ERROR: axios response " + error);
+            }
+        }
+        else{
+            this.db.getExchangeRates()
+        }
     }
 }
 
