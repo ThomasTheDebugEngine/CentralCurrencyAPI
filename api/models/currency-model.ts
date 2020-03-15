@@ -111,7 +111,7 @@ export class DBmanager implements IDBManager{
         if(boolDataStale){ //! these are commented out for cache and fallback data testing
             console.log("STALE DATA");
             //TODO data is old request new data
-            //this.addNewCurrencyEntry(response);
+            this.addNewCurrencyEntry(response);
         }
         else if (!boolDataStale){
             console.log("DATA EXISTS");
@@ -125,6 +125,7 @@ export class DBmanager implements IDBManager{
         }
     }
 
+    //? maybe make this async later
     findRecentDbEntry(modelName: string, inputSchema: mongoose.Schema): mongoose.QueryCursor<any>{
         let searchModel = mongoose.model(modelName, inputSchema);
         let marketDateArr: string[] = this.getMarketDates();
@@ -140,6 +141,7 @@ export class DBmanager implements IDBManager{
 
             if(idx == 0 && (cursor != null || cursor != undefined)){
                 //TODO trigger function to delete old entries (2nd index is old date)
+                //! might not need this as the count func will do checking and deleting before this gets called
             }
     
             return cursor;
@@ -147,8 +149,8 @@ export class DBmanager implements IDBManager{
     }
 
     async getRecentDbEntryCount(modelName: string, inputSchema: mongoose.Schema):Promise<number>{
-        let searchModel = mongoose.model(modelName, inputSchema);
-        let marketDateArr: string[] = this.getMarketDates();
+        const searchModel = mongoose.model(modelName, inputSchema);
+        const marketDateArr: string[] = this.getMarketDates();
 
         for (let idx = 0; idx < marketDateArr.length; idx++) { //latest date first
             let marketDate: string = marketDateArr[idx];
@@ -161,10 +163,9 @@ export class DBmanager implements IDBManager{
                 ).lean();
 
                 if(idx == 0 && documentCount != 0){
-                    //TODO trigger function to delete old entries (2nd index is old date)
+                    //last index is old date
+                    await this.deleteOldDbEntry(modelName, inputSchema, marketDateArr[marketDateArr.length - 1]);
                 }
-                
-                console.log(documentCount)
                 return documentCount;
             } 
             catch (error) {
@@ -173,18 +174,60 @@ export class DBmanager implements IDBManager{
         }
     }
 
-    getMarketDates(): string[]{
-        var todayDate = new Date();
-        var marketDatesArr: string[] = [];
+    async deleteOldDbEntry(inputModelName: string, inputSchema: mongoose.Schema, inputQuery?: string): Promise<void>{
+        const searchModel = mongoose.model(inputModelName, inputSchema);
 
-        for (let idx = 0; idx < 2; idx++) {
-            todayDate.setDate(todayDate.getDate() - idx);
-            todayDate.setMinutes(todayDate.getMinutes() - todayDate.getTimezoneOffset());
-            
-            const tst:string = (todayDate.toISOString().slice(0,10));
-            console.log(tst)
-            marketDatesArr[idx] = tst
+        if(inputQuery.length != 0 || !inputQuery == null || !inputQuery == undefined){
+            try{
+                var docsDeleted = await searchModel.deleteMany(
+                    {
+                        "entryDate": inputQuery
+                    }
+                );
+    
+                if(docsDeleted.ok == 1 && docsDeleted.deletedCount > 0){
+                    console.log("deleted " + docsDeleted.deletedCount + " out of " + docsDeleted.n + " old documents");
+                }
+            }
+            catch (error) {
+                if(error){ throw Error("ERROR: deleting databse entries " + error)}
+            }
         }
-        return marketDatesArr;
+    }
+
+    getMarketDates(): string[]{ //? the 2 date system needs revamping to a smarter system later
+        var marketDate: Date = new Date();
+        var marketDatesArr: string[] = [];
+        
+        //sunday
+        if(marketDate.getDay() == 0){
+            marketDate.setDate(marketDate.getDate() - 2);
+            marketDate.setMinutes(marketDate.getMinutes() - marketDate.getTimezoneOffset());
+
+            marketDatesArr[0] = marketDate.toISOString().slice(0,10);
+            marketDatesArr[1] = "NONE";
+            return marketDatesArr;
+        }
+        //saturday
+        else if(marketDate.getDay() == 6){
+            marketDate.setDate(marketDate.getDate() - 1);
+            marketDate.setMinutes(marketDate.getMinutes() - marketDate.getTimezoneOffset());
+
+            marketDatesArr[0] = marketDate.toISOString().slice(0,10);
+            marketDatesArr[1] = "NONE";
+            return marketDatesArr;
+        }
+        else{
+            console.log("WEEKDAY TRIGGERED")
+            
+            for (let idx = 0; idx < 2; idx++) {
+                marketDate.setDate(marketDate.getDate() - idx);
+                marketDate.setMinutes(marketDate.getMinutes() - marketDate.getTimezoneOffset());
+                
+                marketDatesArr[idx] = marketDate.toISOString().slice(0,10);
+            }
+            return marketDatesArr;
+        }
+
     }
 }

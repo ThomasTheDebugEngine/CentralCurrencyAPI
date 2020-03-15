@@ -39,8 +39,6 @@ class Rquest{
     }
 
     async getNewRates(){
-        //TODO remove this to make it conditional
-
         this.db.Connect();
 
         if(this.db.isDataStale){
