@@ -10,20 +10,19 @@ export interface IDBManager{
 }
 
 export class DBmanager implements IDBManager{
-    private DBaddr:string = "127.0.0.1:4041/test1"; //TODO change to CurrencyDB after testing
+    private DBaddr: string = "127.0.0.1:4041/test1"; //TODO change to CurrencyDB after testing
     
     private currencySchema = new Schema({
         
         apiSource: String,
         baseCurrency: String,
-        entryDate: String,
+        entryDate: Number,
 
         rates:{type: Map}
     });
 
     private connection: mongoose.Connection;
-    private currrencyModel:any;
-    private newModel: any;
+    private currrencyModel: any;
 
     async Connect(){
         let connOpts = {
@@ -44,7 +43,7 @@ export class DBmanager implements IDBManager{
             console.info("DB connected @ " + this.DBaddr);
         });
         
-        this.connection.on("error", (err:Error) => {
+        this.connection.on("error", (err: Error) => {
             throw Error("DB ERROR: " + err);
         });
     }
@@ -52,7 +51,7 @@ export class DBmanager implements IDBManager{
     async addNewCurrencyEntry(resp: any){
         //? may need to check if all APIs have these fields the same
         const baseCurrency: string = resp.data.base;
-        const entryDate: string = resp.data.date;
+        const entryDate: number = this.DateToTimestamp(resp.data.date);
         const sourceURL: string = resp.config.url;
         const rateData = resp.data.rates
 
@@ -82,7 +81,8 @@ export class DBmanager implements IDBManager{
         });
         
     }
-    async isDataStale():Promise<boolean>{
+
+    async isDataStale(): Promise<boolean>{
         try {
             var documentCount: number = await this.getRecentDbEntryCount("currencymodels",this.currencySchema);
         } 
@@ -99,7 +99,7 @@ export class DBmanager implements IDBManager{
         }
     }
 
-    async getExchangeRates(response?: any){ //? maybe return in here also
+    async getExchangeRates(response?: any){ //TODO make it compatible with URL interpreter
         try {
             var boolDataStale: boolean = await this.isDataStale();
             
@@ -108,52 +108,68 @@ export class DBmanager implements IDBManager{
             throw Error("ERROR: external checking stale data " + error);
         }
 
-        if(boolDataStale){ //! these are commented out for cache and fallback data testing
+        if(boolDataStale){
             console.log("STALE DATA");
-            //TODO data is old request new data
             this.addNewCurrencyEntry(response);
         }
         else if (!boolDataStale){
             console.log("DATA EXISTS");
             
-            //TODO data is up to date: query(done), extract(WIP) and return(TODO)
-            /*let cursor: mongoose.QueryCursor<any> = this.findYesterdayDbEntry("currencymodels",this.currencySchema);
+            //TODO data is up to date: query(done), extract(done) and return(WIP)
+            let cursor: mongoose.QueryCursor<any> = await this.findRecentDbEntry("currencymodels",this.currencySchema);
+
+            let ObjArr = [];
 
             await cursor.eachAsync((doc: mongoose.Document) => {
-                console.log(doc); //TODO extraction happens here for each document
-            });*/
-        }
-    }
+                ObjArr.push(doc)
+            });
 
-    //? maybe make this async later
-    findRecentDbEntry(modelName: string, inputSchema: mongoose.Schema): mongoose.QueryCursor<any>{
-        let searchModel = mongoose.model(modelName, inputSchema);
-        let marketDateArr: string[] = this.getMarketDates();
-
-        for (let idx = 0; idx < marketDateArr.length; idx++) { //latest date first
-            const marketDate:string = marketDateArr[idx];
-
-            const cursor: mongoose.QueryCursor<any> = searchModel.find(
-                {
-                    "entryDate": marketDate
-                }
-            ).lean().cursor();
-
-            if(idx == 0 && (cursor != null || cursor != undefined)){
-                //TODO trigger function to delete old entries (2nd index is old date)
-                //! might not need this as the count func will do checking and deleting before this gets called
+            var responseObj = { //TODO make currency 1 and 2 values passed in via params
+                apiSource: "",
+                baseCurrency: "",
+                entryDate: "",
+                currency1: "",
+                currency2: ""
             }
-    
-            return cursor;
+
+            for (let idx = 0; idx < ObjArr.length; idx++) {
+                console.log("Source is: " + ObjArr[idx].apiSource);
+                responseObj.apiSource = ObjArr[idx].apiSource
+
+                console.log("Base is: " + ObjArr[idx].baseCurrency);
+                responseObj.baseCurrency = ObjArr[idx].baseCurrency
+
+                console.log("Entry date is: " + ObjArr[idx].entryDate);
+                responseObj.entryDate = ObjArr[idx].entryDate
+
+                console.log("map is: " + ObjArr[idx].rates.rateMap["TRY"]); //TODO change with variable
+                console.log("map is: " + ObjArr[idx].rates.rateMap["USD"]); //TODO change with variable   
+            }
         }
     }
 
-    async getRecentDbEntryCount(modelName: string, inputSchema: mongoose.Schema):Promise<number>{
+    async findRecentDbEntry(modelName: string, inputSchema: mongoose.Schema): Promise<mongoose.QueryCursor<any>>{
+        let searchModel = mongoose.model(modelName, inputSchema);
+        let marketDateArr: number[] = this.getMarketDates();
+
+        const marketDate: number = marketDateArr[0];
+
+        const cursor: mongoose.QueryCursor<any> = searchModel.find(
+            {
+                "entryDate": marketDate
+            }
+        ).lean().cursor();
+    
+        return cursor;
+        
+    }
+
+    async getRecentDbEntryCount(modelName: string, inputSchema: mongoose.Schema): Promise<number>{
         const searchModel = mongoose.model(modelName, inputSchema);
-        const marketDateArr: string[] = this.getMarketDates();
+        const marketDateArr: number[] = this.getMarketDates();
 
         for (let idx = 0; idx < marketDateArr.length; idx++) { //latest date first
-            let marketDate: string = marketDateArr[idx];
+            let marketDate: number = marketDateArr[idx];
 
             try {
                 const documentCount: number = await searchModel.countDocuments(
@@ -174,14 +190,14 @@ export class DBmanager implements IDBManager{
         }
     }
 
-    async deleteOldDbEntry(inputModelName: string, inputSchema: mongoose.Schema, inputQuery?: string): Promise<void>{
+    async deleteOldDbEntry(inputModelName: string, inputSchema: mongoose.Schema, inputQuery?: number): Promise<void>{
         const searchModel = mongoose.model(inputModelName, inputSchema);
 
-        if(inputQuery.length != 0 || !inputQuery == null || !inputQuery == undefined){
+        if(inputQuery > 0){
             try{
                 var docsDeleted = await searchModel.deleteMany(
                     {
-                        "entryDate": inputQuery
+                        "entryDate": {$lt : inputQuery}
                     }
                 );
     
@@ -190,22 +206,24 @@ export class DBmanager implements IDBManager{
                 }
             }
             catch (error) {
-                if(error){ throw Error("ERROR: deleting databse entries " + error)}
+                if(error){ 
+                    throw Error("ERROR: deleting databse entries " + error)
+                }
             }
         }
     }
 
-    getMarketDates(): string[]{ //? the 2 date system needs revamping to a smarter system later
+    getMarketDates(): number[]{ //? the 2 date system needs revamping to a smarter system later
         var marketDate: Date = new Date();
-        var marketDatesArr: string[] = [];
+        var marketDatesArr: number[] = [];
         
         //sunday
         if(marketDate.getDay() == 0){
             marketDate.setDate(marketDate.getDate() - 2);
             marketDate.setMinutes(marketDate.getMinutes() - marketDate.getTimezoneOffset());
 
-            marketDatesArr[0] = marketDate.toISOString().slice(0,10);
-            marketDatesArr[1] = "NONE";
+            marketDatesArr[0] = this.DateToTimestamp(marketDate.toISOString().slice(0,10));
+            marketDatesArr[1] = -1;
             return marketDatesArr;
         }
         //saturday
@@ -213,21 +231,24 @@ export class DBmanager implements IDBManager{
             marketDate.setDate(marketDate.getDate() - 1);
             marketDate.setMinutes(marketDate.getMinutes() - marketDate.getTimezoneOffset());
 
-            marketDatesArr[0] = marketDate.toISOString().slice(0,10);
-            marketDatesArr[1] = "NONE";
+            marketDatesArr[0] = this.DateToTimestamp(marketDate.toISOString().slice(0,10));
+            marketDatesArr[1] = -1;
             return marketDatesArr;
         }
         else{
-            console.log("WEEKDAY TRIGGERED")
-            
             for (let idx = 0; idx < 2; idx++) {
                 marketDate.setDate(marketDate.getDate() - idx);
                 marketDate.setMinutes(marketDate.getMinutes() - marketDate.getTimezoneOffset());
                 
-                marketDatesArr[idx] = marketDate.toISOString().slice(0,10);
+                marketDatesArr[idx] = this.DateToTimestamp(marketDate.toISOString().slice(0,10));
             }
             return marketDatesArr;
         }
 
+    }
+
+    DateToTimestamp(strDate: string): number{
+        var datum = Date.parse(strDate);
+        return datum / 1000;
     }
 }
