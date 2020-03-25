@@ -1,6 +1,8 @@
 # CentralCurrencyAPI
 a central API for currency exchange rates that can dynamically be configured to get requests from any other APIs 
 
+a note for contribution:
+currently I am using this project to teach myself mongoDB and Express.js so I will not allow contributions. However I have plans to allow contributions once I learn these and will add relevant templates and guides later
 
 this API is meant to be a universal currency API that can be configured to utilize and unify any other API to get the most complete and up to date currency rates
 
