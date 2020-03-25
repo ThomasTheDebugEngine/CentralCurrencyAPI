@@ -1,12 +1,9 @@
 import mongoose, { Schema } from "mongoose";
-import { AxiosResponse } from "axios";
-//import {IRquest, Rquest} from "../contollers/currency-controller";
-
 
 export interface IDBManager{
-    Connect(): void;
+    Connect(): Promise<void>;
     isDataStale(): Promise<boolean>;
-    getExchangeRates(response?: any): void;
+    getExchangeRates(currencyParams: string[], response?: any): Promise<any>;
 }
 
 export class DBmanager implements IDBManager{
@@ -22,9 +19,9 @@ export class DBmanager implements IDBManager{
     });
 
     private connection: mongoose.Connection;
-    private currrencyModel: any;
+    private currencyModel: any;
 
-    async Connect(){
+    async Connect(): Promise<void>{
         let connOpts = {
             useNewUrlParser: true,
             useUnifiedTopology: true
@@ -57,13 +54,13 @@ export class DBmanager implements IDBManager{
 
         var rateMap: Map<string, string> = new Map();
 
-        Object.keys(rateData).forEach((key)=>{
+        Object.keys(rateData).forEach((key) => {
             rateMap.set(key, rateData[key]);
         });
 
-        this.currrencyModel = mongoose.model("currencyModel", this.currencySchema);
+        this.currencyModel = mongoose.model("currencyModel", this.currencySchema);
 
-        const currencyEntry = new this.currrencyModel({
+        const currencyEntry = new this.currencyModel({
             apiSource: sourceURL,
             baseCurrency: baseCurrency,
             entryDate: entryDate,
@@ -76,10 +73,9 @@ export class DBmanager implements IDBManager{
                 throw Error("ERROR: save failed: " + err);
             }
             else{
-                console.log("SUCCESS: save complete")
+                console.log("save complete, serving latest...");
             }
         });
-        
     }
 
     async isDataStale(): Promise<boolean>{
@@ -91,18 +87,16 @@ export class DBmanager implements IDBManager{
         }
 
         if(documentCount == 0){
-            return true; //no new rates exist in the db need new rates
+            return true; //no new rates exist in the db, need new rates
         }
         else{
-            //console.log(cursor)
             return false; //data in the db is up to date
         }
     }
 
-    async getExchangeRates(response?: any){ //TODO make it compatible with URL interpreter
+    async getExchangeRates(currencyParams: string[] , response?: any): Promise<any>{
         try {
             var boolDataStale: boolean = await this.isDataStale();
-            
         } 
         catch (error) {
             throw Error("ERROR: external checking stale data " + error);
@@ -110,41 +104,40 @@ export class DBmanager implements IDBManager{
 
         if(boolDataStale){
             console.log("STALE DATA");
-            this.addNewCurrencyEntry(response);
+            await this.addNewCurrencyEntry(response);
+
+            boolDataStale = await this.isDataStale();
+
+            if(boolDataStale){
+                this.getExchangeRates(currencyParams, response); //! this might introduce an infinite loop if a bug on timestamp exists
+            }
         }
         else if (!boolDataStale){
-            console.log("DATA EXISTS");
-            
-            //TODO data is up to date: query(done), extract(done) and return(WIP)
             let cursor: mongoose.QueryCursor<any> = await this.findRecentDbEntry("currencymodels",this.currencySchema);
 
             let ObjArr = [];
 
             await cursor.eachAsync((doc: mongoose.Document) => {
-                ObjArr.push(doc)
+                ObjArr.push(doc);
             });
 
-            var responseObj = { //TODO make currency 1 and 2 values passed in via params
+            var responseObj = {
                 apiSource: "",
                 baseCurrency: "",
                 entryDate: "",
                 currency1: "",
-                currency2: ""
+                currency2: "",
             }
 
-            for (let idx = 0; idx < ObjArr.length; idx++) {
-                console.log("Source is: " + ObjArr[idx].apiSource);
-                responseObj.apiSource = ObjArr[idx].apiSource
+            for (let idx = 0; idx < ObjArr.length; idx++) {     
+                responseObj.apiSource = ObjArr[idx].apiSource;
+                responseObj.baseCurrency = ObjArr[idx].baseCurrency;         
+                responseObj.entryDate = ObjArr[idx].entryDate;
 
-                console.log("Base is: " + ObjArr[idx].baseCurrency);
-                responseObj.baseCurrency = ObjArr[idx].baseCurrency
-
-                console.log("Entry date is: " + ObjArr[idx].entryDate);
-                responseObj.entryDate = ObjArr[idx].entryDate
-
-                console.log("map is: " + ObjArr[idx].rates.rateMap["TRY"]); //TODO change with variable
-                console.log("map is: " + ObjArr[idx].rates.rateMap["USD"]); //TODO change with variable   
+                responseObj.currency1 = ObjArr[idx].rates.rateMap[currencyParams[0]];
+                responseObj.currency2 = ObjArr[idx].rates.rateMap[currencyParams[1]];   
             }
+            return responseObj;
         }
     }
 
@@ -160,8 +153,7 @@ export class DBmanager implements IDBManager{
             }
         ).lean().cursor();
     
-        return cursor;
-        
+        return cursor;   
     }
 
     async getRecentDbEntryCount(modelName: string, inputSchema: mongoose.Schema): Promise<number>{
@@ -197,7 +189,7 @@ export class DBmanager implements IDBManager{
             try{
                 var docsDeleted = await searchModel.deleteMany(
                     {
-                        "entryDate": {$lt : inputQuery}
+                        "entryDate": {$lt : inputQuery - 1}
                     }
                 );
     
@@ -213,7 +205,7 @@ export class DBmanager implements IDBManager{
         }
     }
 
-    getMarketDates(): number[]{ //? the 2 date system needs revamping to a smarter system later
+    getMarketDates(): number[]{//! monday before market openings always returns stale
         var marketDate: Date = new Date();
         var marketDatesArr: number[] = [];
         

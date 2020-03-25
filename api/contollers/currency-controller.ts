@@ -2,23 +2,20 @@ import {Request, Response} from "express";
 import { DBmanager, IDBManager} from "../models/currency-model";
 import axios, { AxiosResponse, AxiosPromise } from "axios";
 
- 
-
-export function CurrencyController(req: Request, res: Response){
-    let CurrReq = new UrlInterpreter(req.params.CurrencyParams);
-    res.send("URL params via controller: " + req.params.CurrencyParams);
-}
-
-class UrlInterpreter{
-    private currency1: string = null;
-    private currency2: string = null;
-
-    constructor(requestParams: string){
-        [this.currency1, this.currency2] = requestParams.split("-");
-        console.log("URL via interpreter " + this.currency1 + " | " + this.currency2);
+export async function CurrencyController(req: Request, res: Response){
+    let paramArray: string[] = req.params.CurrencyParams.split("-");
+    //TODO add type checking here to make sure the params are ok and convertable to 3 letter ISO codes
+    
+    try {
+        let rates = await exc.getNewRates(paramArray);
+        
+        console.log("RSP TST IS: ", rates); //TODO modify headers in response | throw status error if error is there
+        res.send(rates)
+    } 
+    catch (error) {
+        throw Error("ERROR: unable to serve clients " + error)
     }
 }
-
 
 class Rquest{
     private Url: string = "https://api.exchangeratesapi.io/latest?base=USD";
@@ -28,7 +25,7 @@ class Rquest{
         this.db = _DBmanager;
     }
 
-    async GetExchangeRates(apiURL: string){
+    async RequestExchangeRates(apiURL: string){//TODO add request error handling
         try {
             const response = await axios.get(apiURL);
             return response;
@@ -38,23 +35,32 @@ class Rquest{
         }
     }
 
-    async getNewRates(){
+    async getNewRates(currencyParams: string[]){
         this.db.Connect();
 
-        if(this.db.isDataStale){
+        const dataIsStale: boolean = await this.db.isDataStale();
+
+        if(dataIsStale){
+            let count = 0;
+
             try {
-                var response = await this.GetExchangeRates(this.Url);
-                this.db.getExchangeRates(response);   
+                var response = await this.RequestExchangeRates(this.Url);
+                
+                for (let idx = 0; idx < 2; idx++) { //signal repeater to ensure successful return or rates
+                    var newRates = await this.db.getExchangeRates(currencyParams, response);
+                    count += 1;
+                }
+                return newRates;
             } 
             catch (error) {
                 throw Error("ERROR: axios response " + error);
             }
         }
         else{
-            this.db.getExchangeRates()
+            const newRates = await this.db.getExchangeRates(currencyParams, response);
+            return newRates;
         }
     }
 }
 
-var exc = new Rquest(new DBmanager);
-exc.getNewRates();
+let exc = new Rquest(new DBmanager);
