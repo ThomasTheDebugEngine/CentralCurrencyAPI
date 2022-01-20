@@ -4,7 +4,7 @@
   "description": "this is an api to convert currency received over http/https and respond to any requester",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon --watch *.ts --exec ts-node app.ts",
+    "dev": "nodemon --watch app.ts --exec ts-node app.ts",
     "start": "node ./bin/www",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
